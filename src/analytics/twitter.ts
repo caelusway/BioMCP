@@ -1,8 +1,37 @@
 import { DatabaseManager } from '../database/manager.js';
 import { Logger } from '../utils/logger.js';
 import { subDays, format } from 'date-fns';
-import lodash from 'lodash';
-const { groupBy, orderBy, sumBy } = lodash;
+
+// Helper functions to replace lodash
+function groupBy<T>(array: T[], key: string): Record<string, T[]> {
+  return array.reduce((result, item) => {
+    const group = (item as any)[key];
+    if (!result[group]) {
+      result[group] = [];
+    }
+    result[group].push(item);
+    return result;
+  }, {} as Record<string, T[]>);
+}
+
+function orderBy<T>(array: T[], keys: string[], orders: string[]): T[] {
+  return [...array].sort((a, b) => {
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const order = orders[i];
+      const aVal = (a as any)[key];
+      const bVal = (b as any)[key];
+      
+      if (aVal < bVal) return order === 'asc' ? -1 : 1;
+      if (aVal > bVal) return order === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+}
+
+function sumBy<T>(array: T[], key: string): number {
+  return array.reduce((sum, item) => sum + ((item as any)[key] || 0), 0);
+}
 
 export interface TwitterMetrics {
   total_tweets: number;
@@ -330,9 +359,9 @@ export class TwitterAnalytics {
       
       // Group by date and get top hashtags per day
       const trendsByDate = groupBy(hashtagTrends.rows, 'date');
-      results.daily_trending_hashtags = Object.entries(trendsByDate).map(([date, hashtags]) => ({
+      results.daily_trending_hashtags = Object.entries(trendsByDate).map(([date, hashtagsArray]) => ({
         date,
-        hashtags: hashtags.slice(0, 5).map((h: any) => ({
+        hashtags: (hashtagsArray as any[]).slice(0, 5).map((h: any) => ({
           hashtag: h.hashtag,
           count: parseInt(h.count)
         }))
