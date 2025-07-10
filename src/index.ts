@@ -364,7 +364,7 @@ async function main() {
 
     // Check if running in HTTP mode
     // Default to HTTP mode for Railway/production deployments
-    const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_NAME || process.env.RAILWAY_SERVICE_NAME);
+    const isRailway = process.env.MCP_HTTP_MODE;
     const isHttpMode = process.env.MCP_HTTP_MODE === 'true' || 
                        process.argv.includes('--http') || 
                        isRailway || 
@@ -397,7 +397,8 @@ async function main() {
       const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
       // Handle POST requests for client-to-server communication
-      app.post('/mcp', authManager.validateApiKey, async (req, res) => {
+      // Make MCP endpoint publicly accessible for Railway deployment
+      app.post('/mcp', async (req, res) => {
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
         let transport: StreamableHTTPServerTransport;
 
@@ -530,6 +531,9 @@ async function main() {
           service: 'Bio Analytics MCP',
           description: 'Analytics platform for Biotechnology and Science DAOs',
           version: '1.0.0',
+          port: httpPort,
+          host: httpHost,
+          isRailway: isRailway,
           endpoints: {
             health: '/health',
             status: '/status',
@@ -542,6 +546,16 @@ async function main() {
             enabled: authManager.getStats().authEnabled,
             type: 'API Key + Session'
           }
+        });
+      });
+
+      // Simple test endpoint for Railway connectivity
+      app.get('/ping', (req, res) => {
+        res.json({
+          message: 'pong',
+          timestamp: new Date().toISOString(),
+          railway: isRailway,
+          port: httpPort
         });
       });
 
