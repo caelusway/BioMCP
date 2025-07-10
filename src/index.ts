@@ -364,15 +364,25 @@ async function main() {
 
     // Check if running in HTTP mode
     // Default to HTTP mode for Railway/production deployments
-    const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.PORT;
+    const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_NAME || process.env.RAILWAY_SERVICE_NAME);
     const isHttpMode = process.env.MCP_HTTP_MODE === 'true' || 
                        process.argv.includes('--http') || 
                        isRailway || 
-                       process.env.NODE_ENV === 'production';
+                       process.env.NODE_ENV === 'production' ||
+                       !!process.env.PORT; // Force HTTP mode if PORT is set
     
     // Use Railway's PORT environment variable if available
     const httpPort = parseInt(process.env.PORT || process.env.MCP_HTTP_PORT || '3000');
-    const httpHost = process.env.HOST || '0.0.0.0';
+    const httpHost = '0.0.0.0'; // Always bind to all interfaces for Railway
+    
+    // Enhanced logging for Railway debugging
+    logger.info(`🔍 Deployment Detection:`);
+    logger.info(`   - Railway Environment: ${isRailway}`);
+    logger.info(`   - HTTP Mode: ${isHttpMode}`);
+    logger.info(`   - PORT from env: ${process.env.PORT || 'not set'}`);
+    logger.info(`   - Using port: ${httpPort}`);
+    logger.info(`   - Using host: ${httpHost}`);
+    logger.info(`   - NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
 
     if (isHttpMode) {
       // Start HTTP server for MCP Inspector using StreamableHTTPServerTransport
@@ -535,14 +545,38 @@ async function main() {
         });
       });
 
-      app.listen(httpPort, httpHost, () => {
-        logger.info(`Bio Analytics MCP HTTP Server listening on ${httpHost}:${httpPort}`);
-        logger.info(`Health check: http://${httpHost}:${httpPort}/health`);
-        logger.info(`MCP Inspector: http://${httpHost}:${httpPort}/mcp`);
+      const server = app.listen(httpPort, httpHost, () => {
+        logger.info(`✅ Bio Analytics MCP HTTP Server listening on ${httpHost}:${httpPort}`);
+        logger.info(`🔗 Health check: http://${httpHost}:${httpPort}/health`);
+        logger.info(`🔗 MCP Inspector: http://${httpHost}:${httpPort}/mcp`);
+        logger.info(`🔗 Service info: http://${httpHost}:${httpPort}/`);
         
         if (isRailway) {
           logger.info('🚀 Railway deployment detected - Server ready for external connections');
+          logger.info(`🌐 Railway should expose this service on HTTPS automatically`);
         }
+      });
+
+      // Enhanced error handling for Railway
+      server.on('error', (error: any) => {
+        logger.error('❌ Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+          logger.error(`Port ${httpPort} is already in use`);
+        } else if (error.code === 'EACCES') {
+          logger.error(`Permission denied to bind to port ${httpPort}`);
+        }
+        process.exit(1);
+      });
+
+      // Handle server startup timeout
+      const startupTimeout = setTimeout(() => {
+        logger.error('⏰ Server startup timeout - Railway might have issues');
+        process.exit(1);
+      }, 30000);
+
+      server.on('listening', () => {
+        clearTimeout(startupTimeout);
+        logger.info('🎯 Server is now accepting connections');
       });
 
     } else {
