@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "start:railway": "node scripts/railway-start.js",
+    "start:simple": "node scripts/railway-simple-test.js",
     "dev": "tsc && node dist/index.js",
     "dev:watch": "tsc --watch",
     "railway:logs": "railway logs --follow",
