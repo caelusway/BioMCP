@@ -362,9 +362,17 @@ async function main() {
     await dbManager.connect();
     logger.info('Database connection established');
 
-    // Check if running in HTTP mode (for MCP Inspector)
-    const isHttpMode = process.env.MCP_HTTP_MODE === 'true' || process.argv.includes('--http');
-    const httpPort = parseInt(process.env.MCP_HTTP_PORT || '3000');
+    // Check if running in HTTP mode
+    // Default to HTTP mode for Railway/production deployments
+    const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.PORT;
+    const isHttpMode = process.env.MCP_HTTP_MODE === 'true' || 
+                       process.argv.includes('--http') || 
+                       isRailway || 
+                       process.env.NODE_ENV === 'production';
+    
+    // Use Railway's PORT environment variable if available
+    const httpPort = parseInt(process.env.PORT || process.env.MCP_HTTP_PORT || '3000');
+    const httpHost = process.env.HOST || '0.0.0.0';
 
     if (isHttpMode) {
       // Start HTTP server for MCP Inspector using StreamableHTTPServerTransport
@@ -527,10 +535,14 @@ async function main() {
         });
       });
 
-      app.listen(httpPort, () => {
-        logger.info(`Bio Analytics MCP HTTP Server listening on port ${httpPort}`);
-        logger.info(`Health check: http://localhost:${httpPort}/health`);
-        logger.info(`MCP Inspector: http://localhost:${httpPort}/mcp`);
+      app.listen(httpPort, httpHost, () => {
+        logger.info(`Bio Analytics MCP HTTP Server listening on ${httpHost}:${httpPort}`);
+        logger.info(`Health check: http://${httpHost}:${httpPort}/health`);
+        logger.info(`MCP Inspector: http://${httpHost}:${httpPort}/mcp`);
+        
+        if (isRailway) {
+          logger.info('🚀 Railway deployment detected - Server ready for external connections');
+        }
       });
 
     } else {
